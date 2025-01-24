@@ -446,12 +446,12 @@ export default function Home() {
                 </div>
               </div>
               <div className="mt-6">
-                <h4 className="text-base sm:text-lg font-semibold mb-2">Key Features:</h4>
+                <h4 className="text-base sm:text-lg font-semibold mb-2">key features:</h4>
                 <ul className="list-disc pl-5 space-y-2">
-                  <li>Innovative problem-solving approach</li>
-                  <li>Scalable and efficient architecture</li>
-                  <li>User-centric design principles</li>
-                  <li>Integration of cutting-edge technologies</li>
+                  <li>fun</li>
+                  <li>flingable</li>
+                  <li>distracting</li>
+                  <li>https://www.fling.fish/</li>
                 </ul>
               </div>
             </>
