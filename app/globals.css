@@ -2,26 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
+@layer base {
+  body {
+    background: linear-gradient(
+      180deg,
+      #1A1A1A 17%,
+      #3B4553 35%,
+      #687B8A 51%,
+      #A3BAC7 79%,
+      #F0F0F0 94.5%
+    );
+    min-height: 100vh;
+    color: white;
+    font-feature-settings: "mono" 1;
+  }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
+  .glass-card {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.1);
+  }
+
+  .glass-nav {
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .monospace {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "mono" 1;
   }
 }
 
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+[data-tab-content] {
+  display: none;
 }
+
+[data-tab-content][data-state='active'] {
+  display: block;
+}
+
+[data-state='active'][role='tab'] {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+[role='tab'] {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.2s;
+}
+
+[role='tab']:hover {
+  color: white;
+}
+
