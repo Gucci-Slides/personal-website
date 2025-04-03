@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useScroll, useTransform } from 'framer-motion';
 
 // --- Helper Functions ---
 function getRandomHexColor(): string {
@@ -31,8 +31,6 @@ function getContrastColor(hex: string): '#000000' | '#FFFFFF' {
   return luminance < 0.6 ? '#FFFFFF' : '#000000'; 
 }
 
-const TARGET_COLOR = '#7CABCE';
-
 // --- Preloader Component ---
 interface PreloaderProps {
   onComplete: () => void;
@@ -42,44 +40,46 @@ interface PreloaderProps {
 const Preloader: React.FC<PreloaderProps> = ({ onComplete, onColorGenerated }) => {
   const [step, setStep] = useState(0);
   const [bgColor, setBgColor] = useState('#000000');
-  const [textColor, setTextColor] = useState('#FFFFFF');
+  const [textColor, setTextColor] = useState('#FFFFFF'); // Used for outline
 
-  const cycleDuration = 350; // ms between color changes
-  const finalDisplayDuration = 400; // ms to display final color before exit
+  const cycleDuration = 350; 
+  const finalDisplayDuration = 400;
+  const textToOutline = "ARLISS";
 
   useEffect(() => {
-    // Reset step if component re-mounts (optional, good practice)
-    // setStep(0);
-    // setBgColor('#000000');
-    // setTextColor('#FFFFFF');
+    let colorUpdateTimeout: NodeJS.Timeout | null = null;
+    let completionTimeout: NodeJS.Timeout | null = null;
 
-    // State update logic based on step
-    let timeoutId: NodeJS.Timeout | null = null;
     if (step < 9) {
       const newColor = getRandomHexColor();
-      onColorGenerated(newColor);
-      timeoutId = setTimeout(() => {
-        setBgColor(newColor);
-        setTextColor(getContrastColor(newColor));
-        setStep(prevStep => prevStep + 1);
+      onColorGenerated(newColor); // Still pass up
+
+      setBgColor(newColor);
+      setTextColor(getContrastColor(newColor));
+
+      colorUpdateTimeout = setTimeout(() => {
+          setStep(prev => prev + 1);
       }, cycleDuration);
 
     } else if (step === 9) {
-      const finalColor = TARGET_COLOR;
-      setBgColor(finalColor);
-      setTextColor(getContrastColor(finalColor));
-      timeoutId = setTimeout(() => { onComplete(); }, finalDisplayDuration);
+      completionTimeout = setTimeout(() => {
+          onComplete();
+      }, finalDisplayDuration);
     }
 
-    // Cleanup timeout
+    // Cleanup
     return () => {
-      if (timeoutId) clearTimeout(timeoutId);
+      if (colorUpdateTimeout) clearTimeout(colorUpdateTimeout);
+      if (completionTimeout) clearTimeout(completionTimeout);
     };
-  // Note: Removed reset logic from deps for simplicity now
-  }, [step, onComplete, onColorGenerated]); // Effect runs when step changes
+  }, [step, onComplete, onColorGenerated, cycleDuration, finalDisplayDuration]); 
 
-  // Calculate progress percentage for the loading bar
   const progressPercent = Math.min(100, (step / 9) * 100);
+
+  const outlineStyle: Record<string, string> = {
+    WebkitTextStroke: `1px ${textColor}`,
+    textStroke: `1px ${textColor}`,
+  };
 
   return (
     <motion.div
@@ -89,29 +89,33 @@ const Preloader: React.FC<PreloaderProps> = ({ onComplete, onColorGenerated }) =
       exit={{ y: '100%' }}
       transition={{ duration: 0.8, ease: [0.43, 0.13, 0.23, 0.96] }}
     >
-      {/* Hex Code Display */}
-      {step > 0 && (
-          <motion.p
-            key={bgColor} // Re-trigger animation on color change
-            initial={{ opacity: 0 }} // Fade in each hex code
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.1 }} // Quick fade
-            className="text-4xl md:text-6xl font-mono font-semibold tabular-nums tracking-wider"
-            style={{ color: textColor }} // Dynamic text color for contrast
-          >
-            {bgColor}
-          </motion.p>
-      )}
+      {/* Removed Hex Code Display */}
 
-      {/* Loading Bar Container */}
+      {/* Outlined Text Container */}
+      <div className="text-center px-4">
+          <h1 
+            className="text-8xl sm:text-9xl md:text-[10rem] lg:text-[11rem] xl:text-[13rem] font-extrabold leading-none flex items-center justify-center"
+            style={outlineStyle}
+          >
+              {Array.from(textToOutline).map((char, index) => (
+                  <motion.span
+                      key={char + "-" + index}
+                      initial={{ color: 'transparent' }}
+                      className="inline-block"
+                  >
+                      {char}
+                  </motion.span>
+              ))}
+          </h1>
+      </div>
+
+      {/* Loading Bar Container (remains the same) */}
       <div className="absolute bottom-0 left-0 w-full h-2 bg-gray-500 bg-opacity-30">
-        {/* Loading Bar Fill */}
         <motion.div
           className="h-full"
-          style={{ backgroundColor: textColor }} // Use contrast color for fill
-          initial={{ width: '0%' }}
+          style={{ backgroundColor: textColor }}
           animate={{ width: `${progressPercent}%` }}
-          transition={{ duration: cycleDuration / 1000, ease: "linear" }} // Sync with cycle duration
+          transition={{ duration: cycleDuration / 1000, ease: "linear" }}
         />
       </div>
     </motion.div>
@@ -122,6 +126,10 @@ const Preloader: React.FC<PreloaderProps> = ({ onComplete, onColorGenerated }) =
 export default function Home() {
   const [isLoading, setIsLoading] = useState(true);
   const [generatedColors, setGeneratedColors] = useState<string[]>([]);
+  const [windowHeight, setWindowHeight] = useState(0);
+  
+  // Ref for the main scrollable container
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const handlePreloadComplete = useCallback(() => {
     setIsLoading(false);
@@ -151,11 +159,24 @@ export default function Home() {
       animate: { opacity: 1, y: 0, transition: { type: "spring", damping: 12, stiffness: 100 } },
   };
 
-  // --- Generate CSS Variables ---
-  const colorStyleVariables = generatedColors.reduce((acc, color, index) => {
-    acc[`--generated-color-${index}`] = color;
-    return acc;
-  }, {} as Record<string, string>);
+  // --- Window Height Effect ---
+  useEffect(() => {
+    const handleResize = () => setWindowHeight(window.innerHeight);
+    handleResize(); // Set initial height
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // --- Framer Motion Scroll Animations ---
+  const { scrollYProgress } = useScroll({ target: scrollContainerRef });
+
+  const arlissOpacity = useTransform(scrollYProgress, [0, 0.3], [1, 0]);
+  const newHeaderOpacity = useTransform(scrollYProgress, [0.1, 0.4], [0, 1]);
+  
+  // --- Restore Corner Text Animation Transforms ---
+  const titleMaxX = typeof window !== 'undefined' ? window.innerWidth * 0.45 : 300;
+  const titleLeftX = useTransform(scrollYProgress, [0, 0.3], [0, titleMaxX]); // Moves right
+  const titleRightX = useTransform(scrollYProgress, [0, 0.3], [0, -titleMaxX]); // Moves left
 
   return (
     <>
@@ -170,52 +191,88 @@ export default function Home() {
       </AnimatePresence>
 
       {!isLoading && (
-        // Main container - single screen, centered content
+        // Wrap scroll container in motion.div for fade-in
         <motion.div
-            key="main-container"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.5 }}
-            className="relative flex flex-col items-center justify-center w-full text-black h-screen overflow-hidden p-4 bg-white"
-            style={colorStyleVariables} // Apply variables for children
+          key="scroll-container-wrapper"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.2 }} // Quick fade-in
         >
-          {/* Corner Titles / Links - Magazine Style */}
-          <p 
-            className="absolute top-4 left-4 md:top-8 md:left-8 text-sm md:text-base font-medium tracking-wider uppercase"
-            style={{ color: generatedColors.length > 0 ? `var(--generated-color-0)` : '#000000' }}
+          {/* Main scrollable container - ADD REF */}
+          <div 
+              ref={scrollContainerRef}
+              key="scroll-container"
+              className="w-full text-black bg-white overflow-y-auto"
           >
-            <span>Software Engineer</span>
-          </p>
-          
-          {/* Removed Twitter Link */}
+            {/* Initial View Section */}
+            <motion.div
+                key="main-content-arliss"
+                initial={{ opacity: 1 }}
+                style={{ opacity: arlissOpacity }}
+                // Remove relative positioning - not needed for fixed children
+                className="flex flex-col items-center justify-center w-full h-screen overflow-hidden p-4"
+            >
+                {/* Corner Texts - Reverted to Fixed + X Transform */}
+                <motion.p 
+                  className="fixed top-4 left-4 md:top-8 md:left-8 z-10 pointer-events-none text-sm md:text-base font-medium tracking-wider uppercase"
+                  initial={{ x: 0 }}
+                  style={{
+                    x: titleLeftX, // Re-enable X transform
+                    color: generatedColors.length > 0 ? generatedColors[0] : '#000000' 
+                  }}
+                >
+                  Software Engineer
+                </motion.p>
+                <motion.p 
+                  className="fixed bottom-4 right-4 md:bottom-8 md:right-8 z-10 pointer-events-none text-sm md:text-base font-medium tracking-wider uppercase"
+                  initial={{ x: 0 }}
+                  style={{
+                    x: titleRightX, // Re-enable X transform
+                    color: generatedColors.length > 1 ? generatedColors[1] : '#000000' 
+                  }}
+                >
+                  Web Design
+                </motion.p>
 
-          <p 
-            className="absolute bottom-4 right-4 md:bottom-8 md:right-8 text-sm md:text-base font-medium tracking-wider uppercase"
-            style={{ color: generatedColors.length > 1 ? `var(--generated-color-1)` : '#000000' }}
-          >
-            Web Design
-          </p>
+                {/* ARLISS Text Block - Remains Centered */}
+                <div className="text-center">
+                    <motion.h1
+                        className="text-8xl sm:text-9xl md:text-[10rem] lg:text-[12rem] xl:text-[15rem] font-extrabold leading-none flex items-baseline justify-center"
+                        variants={sentence}
+                        initial="hidden"
+                        animate="visible"
+                    >
+                        {letters.map((char, index) => (
+                            <motion.span
+                                key={char + "-" + index}
+                                variants={letterVariant}
+                                style={{ color: generatedColors.length > 0 ? generatedColors[index % generatedColors.length] : '#000000' }}
+                            >
+                                {char}
+                            </motion.span>
+                        ))}
+                    </motion.h1>
+                </div>
+            </motion.div>
 
-          {/* ARLISS Text Block - Centered */}
-          <div className="text-center">
-            <motion.h1
-                className="text-8xl sm:text-9xl md:text-[10rem] lg:text-[12rem] xl:text-[15rem] font-extrabold leading-none flex items-baseline justify-center"
-                variants={sentence} 
-                initial="hidden"
-                animate="visible"
-              >
-                {letters.map((char, index) => (
-                  <motion.span
-                      key={char + "-" + index}
-                      variants={letterVariant}
-                      style={{ color: generatedColors.length > 0 ? `var(--generated-color-${index % generatedColors.length})` : '#000000' }}
-                  >
-                    {char}
-                  </motion.span>
-                ))}
-              </motion.h1>
+            {/* Placeholder div 1 - Updated Header */}
+            <div className="relative h-screen w-full bg-gray-100 flex items-center justify-center"> 
+               <motion.h2 
+                  className="text-5xl md:text-7xl font-bold text-center px-8"
+                  // Apply scroll-linked opacity and 3rd generated color
+                  style={{ 
+                      opacity: newHeaderOpacity, 
+                      color: generatedColors.length > 2 ? generatedColors[2] : '#000000' 
+                  }} 
+                >
+                  COMING SOON
+               </motion.h2>
+            </div> 
+            {/* Other Placeholders REMOVED */}
+            {/* <div className="h-screen w-full bg-gray-200"></div> */}
+            {/* <div className="h-screen w-full bg-gray-300"></div> */}
+              
           </div>
-
         </motion.div>
       )}
     </>
